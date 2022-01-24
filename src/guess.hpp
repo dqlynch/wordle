@@ -50,6 +50,8 @@ class Guess {
 
   uint64_t id_string() const;
 
+  void pprint_id() const;
+
   friend std::ostream& operator<<(std::ostream& os, const Guess& guess);
 
   // Auxilliary inferences
@@ -195,13 +197,21 @@ uint64_t Guess::id_string() const {
     id |= c << 7*i;
 
     if (greens_[i] != 0) {
-      id |= (uint64_t) 0b10 << (7*i + NUM_LETTERS);
+      id |= (uint64_t) 0b10 << ((NUM_LETTERS + 2)*i + NUM_LETTERS);
     } else if (yellows_[i] != 0) {
-      id |= (uint64_t) 0b01 << (7*i + NUM_LETTERS);
+      id |= (uint64_t) 0b01 << ((NUM_LETTERS + 2)*i + NUM_LETTERS);
     }
 
   }
   return id;
+}
+
+void Guess::pprint_id() const {
+  for (unsigned char l = 0; l < NUM_LETTERS; ++l) {
+    std::cout << std::bitset<5>(id_string_ >> 7*l) << " ";
+    std::cout << std::bitset<2>(id_string_ >> (7*l + NUM_LETTERS)) << " ";
+  }
+  std::cout << std::endl;
 }
 
 /**

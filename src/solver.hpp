@@ -22,6 +22,12 @@ class Solver {
    Solver(Dictionary* dictionary)
    : dictionary_(dictionary){}
 
+   ~Solver() {
+     for (auto& [k, v] : computed_guesses_) {
+       delete v;
+     }
+   }
+
    /**
     * Determine the optimal guess given an optimally antagonistic game.
     *
@@ -32,8 +38,10 @@ class Solver {
    std::pair<unsigned int, std::string> solve() {
      auto val = player(MAX_VALUE);
      std::cout << "num prunes: " << num_prunes << std::endl;
-     std::cout << "memo hits:   " << memo_hits << std::endl;
-     std::cout << "memo misses: " << memo_misses << std::endl;
+     std::cout << "memo_ hits:   " << memo_hits_ << std::endl;
+     std::cout << "memo_ misses: " << memo_misses_ << std::endl;
+     std::cout << "guess hits:   " << ghits_ << std::endl;
+     std::cout << "guess misses: " << gmisses_ << std::endl;
      return val;
    }
 
@@ -47,11 +55,9 @@ class Solver {
 
    void print_remaining(std::ostream& os);
 
-   size_t memo_misses = 0;
-   size_t memo_hits = 0;
-
  private:
-   std::unordered_map<std::vector<bool>, std::pair<unsigned int, std::string>> memo;
+   std::unordered_map<std::vector<bool>, std::pair<unsigned int, std::string>> memo_;
+   std::unordered_map<std::string, Guess*> computed_guesses_;   // Save computed guesses
 
    static bool compare(std::pair<unsigned int, std::string> a, std::pair<unsigned int, std::string> b) {
      return a.first < b.first;
@@ -62,6 +68,11 @@ class Solver {
    size_t depth_ = 0;
 
    size_t num_prunes = 0;
+
+   size_t memo_misses_ = 0;
+   size_t memo_hits_ = 0;
+   size_t ghits_ = 0;
+   size_t gmisses_ = 0;
 };
 
 /**
@@ -83,15 +94,15 @@ std::pair<unsigned int, std::string> Solver::player(unsigned int bound) {
     // We know we cannot find a guess better or equal to 1 (see fast exit above),
     // so we cannot beat bound in this recursion. Return a value greater than bound
     // with a dummy word value.
-    num_prunes++;
-    return std::pair<unsigned int, std::string>(3, "PRUNED");
+    //num_prunes++;
+    //return std::pair<unsigned int, std::string>(2, "PRUNED");
   }
 
 
   auto key = dictionary_->key();
-  if (memo.count(key)) {
-    ++memo_hits;
-    return memo.at(key);
+  if (memo_.count(key)) {
+    ++memo_hits_;
+    return memo_.at(key);
   }
 
   // <optimal solve length, guess>
@@ -109,28 +120,28 @@ std::pair<unsigned int, std::string> Solver::player(unsigned int bound) {
     std::pair<unsigned int, std::string> worst_case = antagonist(g, bound);
     --depth_;
 
-    //if (depth_ == 0) {
-    //  std::string gap;
-    //  for (size_t i = 0; i < depth_; ++i) {
-    //    gap += "--";
-    //  }
-    //  std::cout << gap << std::endl;
-    //  std::cout << gap << "p" << i << "\n";
-    //  std::cout << gap << g << ":" << worst_case.first << " (" << worst_case.second << ")" <<"\n";
-    //  worst_case.second = g;
-    //  best_worst_case = std::min(best_worst_case, worst_case, compare);
-    //  bound = std::min(bound, best_worst_case.first);
-    //  std::cout << gap << "best: " << best_worst_case.first << " b:"<< bound << "\n";
-    //  std::cout << gap << std::endl;
-    //}
+    if (depth_ == 0) {
+      std::string gap;
+      for (size_t i = 0; i < depth_; ++i) {
+        gap += "--";
+      }
+      std::cout << gap << std::endl;
+      std::cout << gap << "p" << i << "\n";
+      std::cout << gap << g << ":" << worst_case.first << " (" << worst_case.second << ")" <<"\n";
+      worst_case.second = g;
+      best_worst_case = std::min(best_worst_case, worst_case, compare);
+      bound = std::min(bound, best_worst_case.first);
+      std::cout << gap << best_worst_case.second << ": " << best_worst_case.first << " b:"<< bound << "\n";
+      std::cout << gap << std::endl;
+    }
 
     worst_case.second = g;
     best_worst_case = std::min(best_worst_case, worst_case, compare);
     bound = std::min(bound, best_worst_case.first);
   }
 
-  memo.insert({key, best_worst_case});
-  ++memo_misses;
+  memo_.insert({key, best_worst_case});
+  ++memo_misses_;
 
   assert(best_worst_case.first > 1);
 
@@ -138,6 +149,7 @@ std::pair<unsigned int, std::string> Solver::player(unsigned int bound) {
 }
 
 std::pair<unsigned int, std::string> Solver::antagonist(std::string g, unsigned int bound) {
+  unsigned int path_sum = 0;   // TODO
   std::pair<unsigned int, std::string> longest_solve(0, "");
 
   std::vector<bool> computed(dictionary_->reference_words.size(), 0);
@@ -149,11 +161,22 @@ std::pair<unsigned int, std::string> Solver::antagonist(std::string g, unsigned 
 
     if (g == s) {
       longest_solve = std::max(longest_solve, std::pair<unsigned int, std::string>(1, s), compare);
+      ++path_sum;
       continue;
     }
 
-    Guess guess(g, s);
-    std::vector<bool>* pruned = dictionary_->prune(guess);
+    Guess* guess;
+    std::string gkey = g+s;
+    if (computed_guesses_.count(gkey)) {
+      ++ghits_;
+      guess = computed_guesses_.at(gkey);
+    } else {
+      ++gmisses_;
+      guess = new Guess(g, s);
+      computed_guesses_.insert({gkey, guess});
+    }
+
+    std::vector<bool>* pruned = dictionary_->prune(*guess);
 
     // Use insight that the set this guess reduces to == the set of guesses
     // that dedupe with this guess to skip duplicate guess computations
@@ -168,13 +191,16 @@ std::pair<unsigned int, std::string> Solver::antagonist(std::string g, unsigned 
     ++solve.first;
     solve.second = s;
 
+    // This g-s is weighted by the set size it reduces to
+    path_sum += dictionary_->count() * solve.first;
+
     dictionary_->pop(); // Reset pruned_ to starting state
 
     //if (depth_ == 1) {
     //if (g == "steed" && depth_ == 1) {
     //  std::cout << "a" << i << std::endl;
 
-    //  std::cout << guess << " : " << s << std::endl;
+    //  std::cout << *guess << " : " << s << std::endl;
     //  std::cout << "this: " << solve.first << " " << solve.second << std::endl;
     //  std::cout << "best: " << longest_solve.first << " " << longest_solve.second << std::endl;
     //  std::cout << "count: " << dictionary_->count() << std::endl;
@@ -183,6 +209,7 @@ std::pair<unsigned int, std::string> Solver::antagonist(std::string g, unsigned 
     longest_solve = std::max(longest_solve, solve, compare);
   }
 
+  longest_solve.first = path_sum;
   return longest_solve;
 }
 

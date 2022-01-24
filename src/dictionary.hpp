@@ -52,7 +52,7 @@ class Dictionary {
   }
 
   // TODO
-  std::vector<bool> key() const {
+  const std::vector<bool>& key() const {
     return *pruned_;
   }
 
