@@ -1,5 +1,5 @@
 CXX := g++
-#CXXFLAGS := -std=c++17 -O3 -DNDEBUG -Wall -Wextra -Wconversion -pedantic -MD -MP
+O_CXXFLAGS := -std=c++17 -O3 -DNDEBUG -Wall -Wextra -Wconversion -pedantic -MD -MP
 CXXFLAGS := -std=c++17 -g -Og -Wall -Wextra -Wconversion -pedantic -MD -MP
 
 SRC_DIR := src

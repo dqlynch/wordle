@@ -30,14 +30,6 @@ std::vector<std::string> load_wordlist(std::string filename) {
   return wordlist;
 }
 
-PruneIndex load_index(const std::vector<std::string>& wordlist, std::string filename) {
-  std::cout << "Loading file..." << std::endl;
-  std::ifstream file(filename);
-  PruneIndex index(&wordlist, file);
-  std::cout << "Done" << std::endl;
-  return index;
-}
-
 double test_guess_prune_shortcut(Dictionary* dict, std::string g) {
   std::vector<bool> computed(dict->reference_words.size(), 0);
   std::vector<int> sizes;
@@ -105,7 +97,8 @@ size_t count_zeros(const boost::dynamic_bitset<>& bits) {
   return ct;
 }
 
-double test_guess_index(const PruneIndex& index,
+double test_guess_index(const std::vector<std::string>& wordlist,
+                        const PruneIndex& index,
                         const std::string& g,
                         const boost::dynamic_bitset<>& pruned) {
   boost::dynamic_bitset<> computed(pruned);
@@ -115,13 +108,11 @@ double test_guess_index(const PruneIndex& index,
     if (computed[i]) {
       continue;
     }
-    std::string s = index.wordlist()[i];
-    Guess guess(g, s);
+    std::string s = wordlist[i];
 
     const boost::dynamic_bitset<>* s_pruned = index.prune(g, s);
 
     computed |= ~*s_pruned;
-
 
     size_t size = count_zeros(*s_pruned | pruned);
     acc += size * size;
@@ -130,15 +121,15 @@ double test_guess_index(const PruneIndex& index,
   return (double) acc / (double) count_zeros(pruned);
 }
 
-void index_perf_test(const PruneIndex& index, const boost::dynamic_bitset<>& pruned) {
+void index_perf_test(const std::vector<std::string>& wordlist, const PruneIndex& index, const boost::dynamic_bitset<>& pruned) {
   std::vector<std::pair<std::string, double>> average_sizes;
 
   for (size_t i = 0; i < index.size(); ++i) {
-    std::string g = index.wordlist()[i];
+    std::string g = wordlist[i];
     if (pruned[i]) {
       continue;
     }
-    double size = test_guess_index(index, g, pruned);
+    double size = test_guess_index(wordlist, index, g, pruned);
     average_sizes.push_back(std::pair<std::string, double>(g, size));
   }
 
@@ -155,98 +146,103 @@ void index_perf_test(const PruneIndex& index, const boost::dynamic_bitset<>& pru
   //return average_sizes;
 }
 
-void index_helper_test(const PruneIndex& index) {
-  boost::dynamic_bitset<> pruned(index.size(), 0);
-
-  while (true) {
-    index_perf_test(index, pruned);
-
-    std::cout << "Input guess word: " << std::flush;
-    std::string g;
-    std::cin >> g;
-    Guess guess(g);
-
-    std::cout << "Input colors xyg: " << std::flush;
-    std::string colors;
-    std::cin >> colors;
-    guess.set(colors);
-    std::cout << std::endl;
-
-    pruned |= *index.prune(guess);
-    size_t remaining = count_zeros(pruned);
-    std::cout << remaining << " remaining." << std::endl;
-    if (remaining <= 1) {
-      for (size_t i = 0; i < index.size(); ++i) {
-        if (!pruned[i]) {
-          std::cout << index.wordlist()[i] << std::endl;
-          return;
-        }
-      }
-    }
-  }
+void index_perf_test(const std::vector<std::string>& wordlist) {
+  const PruneIndex pindex(wordlist);
+  index_perf_test(wordlist, pindex, boost::dynamic_bitset<>(wordlist.size(), 0));
 }
 
-void prune_index_test(const std::vector<std::string>& wordlist) {
-  // Initially prune for a smaller test set
-  Dictionary dict(wordlist);
-  //Guess guess("raise", "aural");   // --> 78 words
-  //Guess guess("jujus", "share");    // >> 466 words
-  //dict.prune(guess);
+//void index_helper_test(const PruneIndex& index) {
+//  boost::dynamic_bitset<> pruned(index.size(), 0);
+//
+//  while (true) {
+//    index_perf_test(index, pruned);
+//
+//    std::cout << "Input guess word: " << std::flush;
+//    std::string g;
+//    std::cin >> g;
+//    Guess guess(g);
+//
+//    std::cout << "Input colors xyg: " << std::flush;
+//    std::string colors;
+//    std::cin >> colors;
+//    guess.set(colors);
+//    std::cout << std::endl;
+//
+//    pruned |= *index.prune(guess);
+//    size_t remaining = count_zeros(pruned);
+//    std::cout << remaining << " remaining." << std::endl;
+//    if (remaining <= 1) {
+//      for (size_t i = 0; i < index.size(); ++i) {
+//        if (!pruned[i]) {
+//          std::cout << index.wordlist()[i] << std::endl;
+//          return;
+//        }
+//      }
+//    }
+//  }
+//}
 
-  std::vector<std::string> pruned_wordlist;
-  for (size_t i = 0; i < wordlist.size(); ++i) {
-    if (!dict.is_pruned(i)) {
-      pruned_wordlist.push_back(wordlist.at(i));
-    }
-  }
-
-  //PruneIndex save_idx(&wordlist);
-  //PruneIndex index(&wordlist);
-
-  // Save test
-  //std::ofstream of("solution_words.pindex");
-  //save_idx.save(of);
-  //exit(0);
-
-  std::cout << "loading..." << std::endl;
-  std::ifstream file("solution_words.pindex");
-  PruneIndex index(&pruned_wordlist, file);
-  std::cout << "loaded..." << std::endl;
-
-  std::cout << index.num_guesses_ << std::endl;
-  std::cout << index.num_prune_checks_ << std::endl;
-
-  // Check traditionally
-  Guess cmp("raise", "torso");
-  dict.prune(cmp);
-
-  for (size_t i = 0; i < dict.size(); ++i) {
-    if (!dict.is_pruned(i)) {
-      std::cout << dict.reference_words.at(i) << " ";
-    }
-  }
-  std::cout << std::endl;
-  std::cout << dict.count() << std::endl;
-
-  dict.pop();
-
-  // Check with PruneIndex
-  const boost::dynamic_bitset<>* idx_pruned = index.prune(cmp);
-  std::cout << *idx_pruned << std::endl;
-
-  size_t p_idx = 0;
-  for (size_t i = 0; i < dict.size(); ++i) {
-
-    if (!dict.is_pruned(i)) {
-
-      if (!(*idx_pruned)[p_idx]) {
-        std::cout << dict.reference_words.at(i) << " ";
-      }
-      ++p_idx;
-    }
-  }
-  std::cout << std::endl;
-}
+//void prune_index_test(const std::vector<std::string>& wordlist) {
+//  // Initially prune for a smaller test set
+//  Dictionary dict(wordlist);
+//  //Guess guess("raise", "aural");   // --> 78 words
+//  //Guess guess("jujus", "share");    // >> 466 words
+//  //dict.prune(guess);
+//
+//  std::vector<std::string> pruned_wordlist;
+//  for (size_t i = 0; i < wordlist.size(); ++i) {
+//    if (!dict.is_pruned(i)) {
+//      pruned_wordlist.push_back(wordlist.at(i));
+//    }
+//  }
+//
+//  //PruneIndex save_idx(&wordlist);
+//  //PruneIndex index(&wordlist);
+//
+//  // Save test
+//  //std::ofstream of("solution_words.pindex");
+//  //save_idx.save(of);
+//  //exit(0);
+//
+//  std::cout << "loading..." << std::endl;
+//  std::ifstream file("solution_words.pindex");
+//  PruneIndex index(&pruned_wordlist, file);
+//  std::cout << "loaded..." << std::endl;
+//
+//  std::cout << index.num_guesses_ << std::endl;
+//  std::cout << index.num_prune_checks_ << std::endl;
+//
+//  // Check traditionally
+//  Guess cmp("raise", "torso");
+//  dict.prune(cmp);
+//
+//  for (size_t i = 0; i < dict.size(); ++i) {
+//    if (!dict.is_pruned(i)) {
+//      std::cout << dict.reference_words.at(i) << " ";
+//    }
+//  }
+//  std::cout << std::endl;
+//  std::cout << dict.count() << std::endl;
+//
+//  dict.pop();
+//
+//  // Check with PruneIndex
+//  const boost::dynamic_bitset<>* idx_pruned = index.prune(cmp);
+//  std::cout << *idx_pruned << std::endl;
+//
+//  size_t p_idx = 0;
+//  for (size_t i = 0; i < dict.size(); ++i) {
+//
+//    if (!dict.is_pruned(i)) {
+//
+//      if (!(*idx_pruned)[p_idx]) {
+//        std::cout << dict.reference_words.at(i) << " ";
+//      }
+//      ++p_idx;
+//    }
+//  }
+//  std::cout << std::endl;
+//}
 
 void writevsread() {
   // Quick speed test with optimizations disabled
@@ -327,11 +323,13 @@ int main(int argc, char** argv) {
 
   std::vector<std::string> wordlist = load_wordlist(argv[1]);
 
+  //test_gp_pindex(wordlist);
 
-  test_gp_pindex(wordlist);
   //prune_index_test(wordlist);
   //PruneIndex index = load_index(wordlist, argv[2]);
-  //index_perf_test(wordlist, index);
+  //index_perf_test(wordlist);
+  std::cout << "Creating prune idx..." << std::endl;
+  PruneIndex idx(wordlist);
   //index_helper_test(index);
 
   //test_word();

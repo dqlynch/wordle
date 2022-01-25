@@ -20,6 +20,10 @@ class GuessPair {
     return guess_id_;
   }
 
+  const GuessPair& test() {
+    return *this;
+  }
+
  private:
   void compute_id();
 

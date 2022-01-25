@@ -13,7 +13,7 @@ class GuessPairIndex {
     index(wordlist);
   }
 
-  const std::vector<uint64_t> operator[](size_t i) const {
+  const std::vector<uint64_t>& operator[](size_t i) const {
     return guess_index_[i];
   }
 
