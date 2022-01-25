@@ -170,7 +170,7 @@ std::vector<bool>* Dictionary::prune(const Guess& guess) {
    */
   uint64_t min_cts = 0;
   for (const auto& [l, ct] : guess.min_letter_counts) {
-    min_cts |= (uint64_t) ct << BITS_PER_COUNT * ((unsigned char) l - 'a');
+    min_cts |= (uint64_t) ct << BITS_PER_COUNT * ((uint8_t) l - 'a');
   }
 
   /**
@@ -184,8 +184,8 @@ std::vector<bool>* Dictionary::prune(const Guess& guess) {
   uint64_t max_cts = 0;
   uint64_t max_mask = 0;
   for (const auto& [l, ct] : guess.max_letter_counts) {
-    max_cts |= (uint64_t) ct << BITS_PER_COUNT * ((unsigned char) l - 'a');
-    max_mask |= (uint64_t) 0b11 << BITS_PER_COUNT * ((unsigned char) l - 'a');
+    max_cts |= (uint64_t) ct << BITS_PER_COUNT * ((uint8_t) l - 'a');
+    max_mask |= (uint64_t) 0b11 << BITS_PER_COUNT * ((uint8_t) l - 'a');
   }
 
   // Prune wordset
@@ -267,7 +267,7 @@ bool Dictionary::should_prune_word(uint32_t encoded_word, uint64_t letter_cts,
 
     // Check wrong placements
     uint32_t w_result = (w_check ^ encoded_word) | w_mask;
-    for (unsigned char pos = 0; pos < NUM_LETTERS; ++pos) {
+    for (uint8_t pos = 0; pos < NUM_LETTERS; ++pos) {
       uint8_t block = (w_result >> BITS_PER_LETTER * pos) & 0b11111;
       if (!block) {
         //std::cout << "Pruned for having wrong placement." << std::endl;
@@ -306,8 +306,8 @@ void Dictionary::encode_wordlist() {
      * 00000001001101011101000001100000
      */
     uint32_t encoded_word = 0;
-    for (unsigned char i = 0; i < NUM_LETTERS; ++i) {
-      unsigned char c = (unsigned char) word[i] - 'a';
+    for (uint8_t i = 0; i < NUM_LETTERS; ++i) {
+      uint8_t c = (uint8_t) word[i] - 'a';
       encoded_word |= (uint32_t) c << BITS_PER_LETTER * i;
     }
     words_.push_back(encoded_word);
@@ -326,7 +326,7 @@ void Dictionary::encode_wordlist() {
     }
     uint64_t encoded_count = 0;
     for (const auto& [l, ct] : l_counts) {
-      unsigned char pos = (unsigned char) l - 'a';
+      uint8_t pos = (uint8_t) l - 'a';
       encoded_count |= (uint64_t) ct << BITS_PER_COUNT * pos;
     }
     counts_.push_back(encoded_count);

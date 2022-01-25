@@ -1,7 +1,10 @@
 #include "dictionary.hpp"
 #include "guess.hpp"
+#include "guess_pair.hpp"
+#include "guess_pair_index.hpp"
 #include "prune_index.hpp"
 #include "solver.hpp"
+#include "word.hpp"
 
 #include <assert.h>
 
@@ -25,6 +28,14 @@ std::vector<std::string> load_wordlist(std::string filename) {
   }
 
   return wordlist;
+}
+
+PruneIndex load_index(const std::vector<std::string>& wordlist, std::string filename) {
+  std::cout << "Loading file..." << std::endl;
+  std::ifstream file(filename);
+  PruneIndex index(&wordlist, file);
+  std::cout << "Done" << std::endl;
+  return index;
 }
 
 double test_guess_prune_shortcut(Dictionary* dict, std::string g) {
@@ -94,8 +105,10 @@ size_t count_zeros(const boost::dynamic_bitset<>& bits) {
   return ct;
 }
 
-double test_guess_index(const PruneIndex& index, std::string g) {
-  boost::dynamic_bitset<> computed(index.size(), 0);
+double test_guess_index(const PruneIndex& index,
+                        const std::string& g,
+                        const boost::dynamic_bitset<>& pruned) {
+  boost::dynamic_bitset<> computed(pruned);
 
   size_t acc = 0;
   for (size_t i = 0; i < index.size(); ++i) {
@@ -110,23 +123,22 @@ double test_guess_index(const PruneIndex& index, std::string g) {
     computed |= ~*s_pruned;
 
 
-    size_t size = count_zeros(*s_pruned);
+    size_t size = count_zeros(*s_pruned | pruned);
     acc += size * size;
   }
 
-  return (double) acc / (double) index.size();
+  return (double) acc / (double) count_zeros(pruned);
 }
 
-void index_perf_test(const std::vector<std::string>& wordlist, std::string filename) {
-  std::cout << "Loading file..." << std::endl;
-  std::ifstream file(filename);
-  PruneIndex index(&wordlist, file);
-  std::cout << "Testing guesses..." << std::endl;
-
+void index_perf_test(const PruneIndex& index, const boost::dynamic_bitset<>& pruned) {
   std::vector<std::pair<std::string, double>> average_sizes;
 
-  for (std::string g : wordlist) {
-    double size = test_guess_index(index, g);
+  for (size_t i = 0; i < index.size(); ++i) {
+    std::string g = index.wordlist()[i];
+    if (pruned[i]) {
+      continue;
+    }
+    double size = test_guess_index(index, g, pruned);
     average_sizes.push_back(std::pair<std::string, double>(g, size));
   }
 
@@ -135,11 +147,43 @@ void index_perf_test(const std::vector<std::string>& wordlist, std::string filen
         return a.second < b.second;
       });
 
-  for (size_t i = 0; i < average_sizes.size(); ++i) {
+  //for (size_t i = 0; i < average_sizes.size(); ++i) {
+  for (size_t i = 0; i < average_sizes.size() && i < 15; ++i) {
     auto& avg = average_sizes[i];
     std::cout << avg.first << " " << avg.second << std::endl;
   }
   //return average_sizes;
+}
+
+void index_helper_test(const PruneIndex& index) {
+  boost::dynamic_bitset<> pruned(index.size(), 0);
+
+  while (true) {
+    index_perf_test(index, pruned);
+
+    std::cout << "Input guess word: " << std::flush;
+    std::string g;
+    std::cin >> g;
+    Guess guess(g);
+
+    std::cout << "Input colors xyg: " << std::flush;
+    std::string colors;
+    std::cin >> colors;
+    guess.set(colors);
+    std::cout << std::endl;
+
+    pruned |= *index.prune(guess);
+    size_t remaining = count_zeros(pruned);
+    std::cout << remaining << " remaining." << std::endl;
+    if (remaining <= 1) {
+      for (size_t i = 0; i < index.size(); ++i) {
+        if (!pruned[i]) {
+          std::cout << index.wordlist()[i] << std::endl;
+          return;
+        }
+      }
+    }
+  }
 }
 
 void prune_index_test(const std::vector<std::string>& wordlist) {
@@ -204,49 +248,94 @@ void prune_index_test(const std::vector<std::string>& wordlist) {
   std::cout << std::endl;
 }
 
+void writevsread() {
+  // Quick speed test with optimizations disabled
+  uint8_t x = 0;
+                          // 5.80 baseline to calc idx + val
+  std::bitset<5> bits(0); // 13.84 to write to bitset
+                          // 11.62 to read from bitset
+                          // 14.13 to write then read from bitset
+
+  uint8_t arr[5];         // 5.90 to write to char array
+                          // 5.99 to read from char arr
+                          // 6.61 to write then read from char arr
+
+  uint8_t idx, val;
+  for (uint64_t i = 0; i < UINT_MAX / 5; ++i) {
+    idx = i%5;
+    val = i%2 - 1;
+    bits[idx] = val;
+    x = bits[idx];
+    arr[idx] = val;
+    x = arr[idx];
+  }
+}
+
+
+
+void test_word() {
+  std::string g("sissy");
+  std::string s("essay");
+
+  Word w1(g);
+  Word w2(s);
+
+  Guess old(g, s);
+  std::cout << g << std::endl;
+  std::cout << s << std::endl;
+  std::cout << old << std::endl;
+  std::cout << std::bitset<64>(old.id_string()) << std::endl;
+
+  GuessPair guess_pair(w1, w2);
+  std::cout << std::bitset<64>(guess_pair.id()) << std::endl;
+}
+
+void test_guess_construction(std::vector<std::string> wordlist) {
+  std::vector<Word> words;
+  for (std::string w : wordlist) {
+    words.push_back(Word(w));
+  }
+
+  std::vector<GuessPair> guesses;
+
+  for (size_t i = 0; i < words.size(); ++i) {
+    for (size_t j = 0; j < words.size(); ++j) {
+      const Word& g = words[i];
+      const Word& s = words[j];
+      //std::cout << g.get_word() << " " << s.get_word() << std::endl;
+      GuessPair gp(g, s);
+      Guess old(wordlist[i], wordlist[j]);
+      assert(gp.id() == old.id_string());
+      //guesses.push_back(GuessPair(g, s));
+    }
+  }
+
+  std::cout << words.size() << std::endl;
+  std::cout << guesses.size() << std::endl;
+}
+
+void test_gp_pindex(const std::vector<std::string>& wordlist) {
+  GuessPairIndex gp_index(wordlist);
+  std::cout << gp_index.size() << std::endl;
+}
+
 int main(int argc, char** argv) {
-  if (argc != 2 && argc != 3) {
-    std::cerr << "USAGE: ./wordle_bits wordlist [prune_index]" << std::endl;
+  if (argc != 2) {
+    std::cerr << "USAGE: ./wordle_bits wordlist" << std::endl;
     return 1;
   }
 
   std::vector<std::string> wordlist = load_wordlist(argv[1]);
 
 
+  test_gp_pindex(wordlist);
   //prune_index_test(wordlist);
-  index_perf_test(wordlist, argv[2]);
+  //PruneIndex index = load_index(wordlist, argv[2]);
+  //index_perf_test(wordlist, index);
+  //index_helper_test(index);
 
-  Dictionary dict(wordlist);
+  //test_word();
+  //test_guess_construction(wordlist);
 
-  //auto avgs = perf_test(wordlist);
-  //for (size_t i = 2310; i < avgs.size(); ++i) {
-  //  std::cout << avgs[i].first << " " << avgs[i].second << std::endl;
-  //}
-  //return 0;
-
-  //// Test solve on a prepruned set to start
-  //Guess guess("raise", "aural");    // 78:  0.64 -> 4 dwarf
-  ////Guess guess("jujus", "fluff");    // 134: 3.76 -> 4 thumb
-  ////Guess guess("jujus", "share");    // 466: ?
-
-  //dict.prune(guess);
-  //std::cout << guess << std::endl;
-  //std::cout << "Dict size: " << dict.count() << std::endl;
-
-  ////Guess next("steed")
-
-  ////exit(2);
-
-  //Solver solver(&dict);
-  //auto best = solver.solve();
-
-  //std::cout << best.first << " " << best.second << std::endl;
-  //solver.print_remaining(std::cout);
-
-  ////std::cout << solver.make_guess("stray") << std::endl;
-  ////best = solver.player();
-  ////std::cout << best.first << " " << best.second << std::endl;
-  ////solver.print_remaining(std::cout);
-
-  //return 0;
+  exit(0);
 }

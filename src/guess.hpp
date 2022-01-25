@@ -118,7 +118,7 @@ void Guess::check(const std::string& solution, bool infer_after) {
 
 void Guess::set(const std::string& colors) {
   assert(colors.size() == NUM_LETTERS);
-  for (unsigned char i = 0; i < NUM_LETTERS; ++i) {
+  for (uint8_t i = 0; i < NUM_LETTERS; ++i) {
     char c = colors[i];
     if (c == 'g') {
       greens_[i] = c;
@@ -126,15 +126,17 @@ void Guess::set(const std::string& colors) {
       yellows_[i] = c;
     } else if (c == 'x') {
       greys_[i] = c;
+    } else {
+      std::cerr << "Invalid character " << c << std::endl;
+      assert(false);
     }
-    assert(false);
   }
   infer();
 }
 
 void Guess::infer() {
   // Set correct placements from greens
-  for (unsigned char i = 0; i < NUM_LETTERS; ++i) {
+  for (uint8_t i = 0; i < NUM_LETTERS; ++i) {
     char c = greens_[i];
     if (c != 0) {
       correct_placements.push_back(std::pair(i, c));
@@ -142,7 +144,7 @@ void Guess::infer() {
   }
 
   // Set wrong placements from yellows + greys
-  for (unsigned char i = 0; i < NUM_LETTERS; ++i) {
+  for (uint8_t i = 0; i < NUM_LETTERS; ++i) {
     char y = yellows_[i];
     char x = greys_[i];
     if (y != 0) {
@@ -192,8 +194,8 @@ uint64_t Guess::id_string() const {
   }
 
   uint64_t id = 0;
-  for (unsigned char i = 0; i < NUM_LETTERS; ++i) {
-    uint64_t c = (unsigned char) word_[i] - 'a';
+  for (uint8_t i = 0; i < NUM_LETTERS; ++i) {
+    uint64_t c = (uint8_t) word_[i] - 'a';
     id |= c << 7*i;
 
     if (greens_[i] != 0) {
@@ -207,7 +209,7 @@ uint64_t Guess::id_string() const {
 }
 
 void Guess::pprint_id() const {
-  for (unsigned char l = 0; l < NUM_LETTERS; ++l) {
+  for (uint8_t l = 0; l < NUM_LETTERS; ++l) {
     std::cout << std::bitset<5>(id_string_ >> 7*l) << " ";
     std::cout << std::bitset<2>(id_string_ >> (7*l + NUM_LETTERS)) << " ";
   }
@@ -285,7 +287,7 @@ void Guess::print_state() const {
 
 
 std::ostream& operator<<(std::ostream& os, const Guess& guess) {
-  for (unsigned char i = 0; i < NUM_LETTERS; ++i) {
+  for (uint8_t i = 0; i < NUM_LETTERS; ++i) {
     os << " ";
     if (guess.greens_[i] != 0) {
       os << GREENC;

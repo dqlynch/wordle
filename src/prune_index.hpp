@@ -4,8 +4,6 @@
 #include "constants.hpp"
 #include "guess.hpp"
 
-#include <boost/dynamic_bitset.hpp>
-
 #include <iostream>
 #include <fstream>
 #include <unordered_map>
