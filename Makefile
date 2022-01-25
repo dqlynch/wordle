@@ -16,6 +16,9 @@ DEPFILES := $(OBJECTS:.o=.d)
 all: $(OBJECTS)
 	$(CXX) $(LDFLAGS) $(CXXFLAGS) $(LDFLAGS) $^ -o $(EXE) $(LDLIBS) -v
 
+opt: $(OBJECTS)
+	$(CXX) $(LDFLAGS) $(O_CXXFLAGS) $(LDFLAGS) $^ -o $(EXE) $(LDLIBS) -v
+
 -include $(DEPFILES)
 
 run: all

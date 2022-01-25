@@ -10,12 +10,22 @@
 #include <unordered_map>
 #include <vector>
 
+const size_t SIZE_UL = sizeof(unsigned long);
+const size_t SIZE_64 = sizeof(uint64_t);
+
 class PruneIndex {
  public:
   PruneIndex(const std::vector<std::string>& wordlist)
     : guess_index_(GuessPairIndex(wordlist)), size_(wordlist.size()) {
-      index(wordlist);
-    }
+      _index_word_to_i(wordlist); // TODO this doesn't belong in this class
+    index();
+  }
+
+  PruneIndex(const std::vector<std::string>& wordlist, const std::string& filename)
+    : guess_index_(GuessPairIndex(wordlist)), size_(wordlist.size()) {
+      _index_word_to_i(wordlist); // TODO this doesn't belong in this class
+    load(filename);
+  }
 
   ~PruneIndex(){}
 
@@ -31,11 +41,21 @@ class PruneIndex {
     return size_;
   }
 
+  void _dump() const {
+    for (const auto& [gid,v] : prune_index_) {
+      std::cout << gid << " " << v << std::endl;
+    }
+
+    std::cout << prune_index_.size() << std::endl;
+  }
+
  private:
   /**
    * Populate this object's index
    */
-  void index(const std::vector<std::string>& wordlist);
+  void index();
+
+  void load(const std::string& filename);
 
   void _index_word_to_i(const std::vector<std::string>& wordlist);
 
@@ -76,24 +96,20 @@ const boost::dynamic_bitset<>* PruneIndex::prune(std::string g, std::string s) c
  * Private
  */
 
-void PruneIndex::index(const std::vector<std::string>& wordlist) {
-  std::cout << "Constructing prune vectors..." << std::endl;
+void PruneIndex::index() {
   _index_prune();
-  std::cout << "Done" << std::endl;
-  _index_word_to_i(wordlist); // TODO this doesn't belong in this class
 }
 
 // TODO this is slow, save to file
 void PruneIndex::_index_prune() {
   for (size_t i = 0; i < size_; ++i) {
-
     const std::vector<uint64_t>& g_pairs = guess_index_[i];
 
     for (size_t j = 0; j < size_; ++j) {
       uint64_t gid = g_pairs[j];
       // Index all like g guess-pairs as a dynamic bitset
       if (prune_index_.count(gid)) {
-        // This gid has been pruned
+        // This gid has already been computed
         continue;
       }
 
@@ -117,6 +133,71 @@ void PruneIndex::_index_word_to_i(const std::vector<std::string>& wordlist) {
     std::string g = wordlist.at(i);
     word_to_i_.insert({g, i});
   }
+}
+
+void PruneIndex::save(std::ostream& os) const {
+  boost::dynamic_bitset<> ulong_mask(size_, ULONG_MAX);
+
+  // Write size of guess id keyset as fixed size 64-bit uint
+  uint64_t k_size = prune_index_.size();
+  os.write(reinterpret_cast<char *>(&k_size), SIZE_64);
+
+  for (auto [gid, bits] : prune_index_) {
+    // Write 64-bit guess id
+    os.write(reinterpret_cast<const char*>(&gid), SIZE_64);
+
+    // Write bitset in chunks of size ulong
+    // TODO can technically assemble an in-mem buffer and write all at once,
+    // but only really load needs to be fast once pindex is generated
+    for (size_t i = 0; i < size_; i += 8 * SIZE_UL) {
+      unsigned long ulong = (bits & ulong_mask).to_ulong();
+
+      os.write(reinterpret_cast<char*>(&ulong), SIZE_UL);
+
+      bits >>= (8 * SIZE_UL);
+    }
+  }
+}
+
+void PruneIndex::load(const std::string& filename) {
+  // Number of unsigned long blocks required to fully hold size_ bits
+  const size_t UL_BLOCKS_PER_BITSET = (size_ - 1) / (8 * SIZE_UL) + 1;
+
+  std::ifstream file(filename);
+
+  char buf_64[SIZE_64]; // separate buffer for reading fixed size vals
+
+  char* bits_buf = new char[UL_BLOCKS_PER_BITSET * SIZE_UL];
+  unsigned long* block_itr = reinterpret_cast<unsigned long*>(bits_buf);
+  unsigned long* block_itr_end = block_itr + UL_BLOCKS_PER_BITSET;
+
+  // Read fixed length size of guess id keyset
+  uint64_t k_size;
+  file.read(buf_64, SIZE_64);
+  memcpy(&k_size, buf_64, SIZE_64);
+
+  for (size_t i = 0; i < k_size; ++i) {
+    // Read fixed length gid key
+    uint64_t gid;
+    file.read(buf_64, SIZE_64);
+    memcpy(&gid, buf_64, SIZE_64);
+
+    /**
+     * We have to construct the bitset in a way that avoids single-bit
+     * assignments to keep this fast: builtin stream operator reads bit
+     * by bit and takes forever.
+     * Read file binary into contiguous blocks of ulong and pass iterator
+     * directly to dynamic::bitset constructor.
+     */
+    boost::dynamic_bitset<> bits;
+    file.read(bits_buf, (long) (SIZE_UL * UL_BLOCKS_PER_BITSET));
+    bits.append(block_itr, block_itr_end);
+    bits.resize(size_);   // trim any excess bits from last ulong block
+
+    prune_index_.insert({gid, bits});
+  }
+
+  delete[] bits_buf;
 }
 
 #endif

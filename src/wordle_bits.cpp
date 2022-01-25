@@ -316,22 +316,45 @@ void test_gp_pindex(const std::vector<std::string>& wordlist) {
 }
 
 int main(int argc, char** argv) {
-  if (argc != 2) {
-    std::cerr << "USAGE: ./wordle_bits wordlist" << std::endl;
+  if (argc != 2 && argc != 3) {
+    std::cerr << "USAGE: ./wordle_bits wordlist [prune_index]" << std::endl;
     return 1;
   }
 
   std::vector<std::string> wordlist = load_wordlist(argv[1]);
+
+  //for (int i = 0; i < 100; ++i) {
+  //  std::cout << wordlist[i] << std::endl;
+  //}
 
   //test_gp_pindex(wordlist);
 
   //prune_index_test(wordlist);
   //PruneIndex index = load_index(wordlist, argv[2]);
   //index_perf_test(wordlist);
-  std::cout << "Creating prune idx..." << std::endl;
-  PruneIndex idx(wordlist);
-  //index_helper_test(index);
 
+  //PruneIndex pindex = argc == 3 ?
+  //  PruneIndex(wordlist, argv[2]) :
+  //  PruneIndex(wordlist);
+
+  PruneIndex pindex(wordlist);
+  std::ofstream file(argv[2]);
+  pindex.save(file);
+  //pindex._dump();
+  file.close();
+
+  PruneIndex ld(wordlist, argv[2]);
+  //ld._dump();
+
+  for (size_t i = 0; i < wordlist.size(); ++i) {
+    for (size_t j = 0; j < wordlist.size(); ++j) {
+      //std::cout << *pindex.prune(0, 0) << std::endl;
+      //std::cout << *ld.prune(0, 0) << std::endl;
+      assert(*pindex.prune(i,j) == *ld.prune(i,j));
+    }
+  }
+
+  //index_helper_test(index);
   //test_word();
   //test_guess_construction(wordlist);
 
