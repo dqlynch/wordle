@@ -13,6 +13,9 @@ class GuessPairIndex {
     index(wordlist);
   }
 
+  GuessPairIndex(const GuessPairIndex&) = delete;
+  GuessPairIndex(GuessPairIndex&&) = default;
+
   const std::vector<uint64_t>& operator[](size_t i) const {
     return guess_index_[i];
   }

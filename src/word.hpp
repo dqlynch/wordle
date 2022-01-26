@@ -15,6 +15,9 @@ class Word {
     encode();
   }
 
+  Word(const Word&) = delete;
+  Word(Word&&) = default;     // required to place in vector
+
   const std::string& get_word() const {
     return word_;
   }

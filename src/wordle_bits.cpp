@@ -5,6 +5,7 @@
 #include "prune_index.hpp"
 #include "solver.hpp"
 #include "word.hpp"
+#include "wordle_solver.hpp"
 
 #include <assert.h>
 
@@ -28,6 +29,22 @@ std::vector<std::string> load_wordlist(std::string filename) {
   }
 
   return wordlist;
+}
+
+PruneIndex load_or_generate_pindex(const std::vector<std::string>& wordlist,
+                                   std::string filename) {
+  std::ifstream file(filename);
+  if (file.good()) {
+    return PruneIndex(wordlist, filename);
+  }
+  file.close();
+
+  PruneIndex index(wordlist);
+
+  std::ofstream out(filename);
+  index.save(out);
+
+  return index;
 }
 
 double test_guess_prune_shortcut(Dictionary* dict, std::string g) {
@@ -333,26 +350,48 @@ int main(int argc, char** argv) {
   //PruneIndex index = load_index(wordlist, argv[2]);
   //index_perf_test(wordlist);
 
-  //PruneIndex pindex = argc == 3 ?
-  //  PruneIndex(wordlist, argv[2]) :
-  //  PruneIndex(wordlist);
+  std::cout << "Initializing prune index..." << std::endl;
+  PruneIndex tmp = argc == 3 ?
+    load_or_generate_pindex(wordlist, argv[2]) :
+    PruneIndex(wordlist);
 
-  PruneIndex pindex(wordlist);
-  std::ofstream file(argv[2]);
-  pindex.save(file);
-  //pindex._dump();
-  file.close();
+  std::cout << "Solving" << std::endl;
+  WordleSolver solver(wordlist, std::move(tmp));
 
-  PruneIndex ld(wordlist, argv[2]);
-  //ld._dump();
+  boost::dynamic_bitset<> pruned(wordlist.size());
 
-  for (size_t i = 0; i < wordlist.size(); ++i) {
-    for (size_t j = 0; j < wordlist.size(); ++j) {
-      //std::cout << *pindex.prune(0, 0) << std::endl;
-      //std::cout << *ld.prune(0, 0) << std::endl;
-      assert(*pindex.prune(i,j) == *ld.prune(i,j));
+  bool done = false;
+  // 100: << 1s runtime, solution space = 6004
+  // 500: ~30s runtime, solution space =  822948
+  // 1000: 10m runtime, solution space =  8994353
+  while (!done) {
+    if (pruned.count() == wordlist.size() - 1) {
+      done = true;
     }
+    std::pair<size_t, int> best = solver.solve(pruned);
+    std::cout << best.first << " " << wordlist[best.first] << ": " << best.second << std::endl;
+
+    pruned |= solver.make_guess(pruned, best.first);
+    std::cout << pruned << std::endl;
+    std::cout << std::endl;
   }
+
+  //PruneIndex pindex(wordlist);
+  //std::ofstream file(argv[2]);
+  //pindex.save(file);
+  ////pindex._dump();
+  //file.close();
+
+  //PruneIndex ld(wordlist, argv[2]);
+  ////ld._dump();
+
+  //for (size_t i = 0; i < wordlist.size(); ++i) {
+  //  for (size_t j = 0; j < wordlist.size(); ++j) {
+  //    //std::cout << *pindex.prune(0, 0) << std::endl;
+  //    //std::cout << *ld.prune(0, 0) << std::endl;
+  //    assert(*pindex.prune(i,j) == *ld.prune(i,j));
+  //  }
+  //}
 
   //index_helper_test(index);
   //test_word();

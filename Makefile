@@ -1,6 +1,7 @@
 CXX := g++
-O_CXXFLAGS := -std=c++17 -O3 -DNDEBUG -Wall -Wextra -Wconversion -pedantic -MD -MP
-CXXFLAGS := -std=c++17 -g -Og -Wall -Wextra -Wconversion -pedantic -MD -MP
+CXXFLAGS := -std=c++17 -Wall -Wextra -Wconversion -pedantic -MD -MP
+FFLAGS := -O3 -funroll-loops -DNDEBUG
+#FFLAGS := -Og -g
 
 SRC_DIR := src
 OBJ_DIR := build
@@ -14,28 +15,25 @@ DEPFILES := $(OBJECTS:.o=.d)
 
 
 all: $(OBJECTS)
-	$(CXX) $(LDFLAGS) $(CXXFLAGS) $(LDFLAGS) $^ -o $(EXE) $(LDLIBS) -v
-
-opt: $(OBJECTS)
-	$(CXX) $(LDFLAGS) $(O_CXXFLAGS) $(LDFLAGS) $^ -o $(EXE) $(LDLIBS) -v
+	$(CXX) $(FFLAGS) $(LDFLAGS) $(CXXFLAGS) $(LDFLAGS) $^ -o $(EXE) $(LDLIBS) -v
 
 -include $(DEPFILES)
 
 run: all
-	time ./wordle_bits config/solution_words.txt
+	time ./wordle_bits config/solution_words.txt pindex/solution_words.pindex
 
-sorted: all
-	time ./wordle_bits config/solution_size_srtd.txt
+small: all
+	time ./wordle_bits config/small.txt pindex/small.pindex
 
 guess: all
-	time ./wordle_bits config/additional_guess_words.txt
+	time ./wordle_bits config/additional_guess_words.txt pindex/additional_guess_words.pindex
 
 allwords: all
-	time ./wordle_bits config/all_words.txt
+	time ./wordle_bits config/all_words.txt pindex/all_words.pindex
 
 
 $(OBJECTS): $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp | $(OBJ_DIR)
-	$(CC) $(CXXFLAGS) -c $< -o $@
+	$(CC) $(CXXFLAGS) $(FFLAGS) -c $< -o $@
 
 $(OBJ_DIR):
 	mkdir -p $@

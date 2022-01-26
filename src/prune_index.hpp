@@ -21,6 +21,9 @@ class PruneIndex {
     index();
   }
 
+  PruneIndex(const PruneIndex&) = delete;
+  PruneIndex(PruneIndex&&) = default;
+
   PruneIndex(const std::vector<std::string>& wordlist, const std::string& filename)
     : guess_index_(GuessPairIndex(wordlist)), size_(wordlist.size()) {
       _index_word_to_i(wordlist); // TODO this doesn't belong in this class
