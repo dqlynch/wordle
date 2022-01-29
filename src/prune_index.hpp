@@ -17,7 +17,6 @@ class PruneIndex {
  public:
   PruneIndex(const std::vector<std::string>& wordlist)
     : guess_index_(GuessPairIndex(wordlist)), size_(wordlist.size()) {
-      _index_word_to_i(wordlist); // TODO this doesn't belong in this class
     index();
   }
 
@@ -26,8 +25,7 @@ class PruneIndex {
 
   PruneIndex(const std::vector<std::string>& wordlist, const std::string& filename)
     : guess_index_(GuessPairIndex(wordlist)), size_(wordlist.size()) {
-      _index_word_to_i(wordlist); // TODO this doesn't belong in this class
-    load(filename);
+    load_or_generate(filename);
   }
 
   ~PruneIndex(){}
@@ -36,7 +34,6 @@ class PruneIndex {
   const boost::dynamic_bitset<>* prune(uint64_t gid) const;
   //const boost::dynamic_bitset<>* prune(const Guess& guess) const; // TODO
   const boost::dynamic_bitset<>* prune(size_t i, size_t j) const;
-  const boost::dynamic_bitset<>* prune(std::string g, std::string s) const;
 
   void save(std::ostream& os) const;
 
@@ -58,9 +55,9 @@ class PruneIndex {
    */
   void index();
 
-  void load(const std::string& filename);
+  void load(std::ifstream& file);
 
-  void _index_word_to_i(const std::vector<std::string>& wordlist);
+  void load_or_generate(const std::string& filename);
 
   void _index_prune();
 
@@ -89,10 +86,6 @@ const boost::dynamic_bitset<>* PruneIndex::prune(uint64_t gid) const {
 const boost::dynamic_bitset<>* PruneIndex::prune(size_t i, size_t j) const {
   uint64_t gid = guess_index_[i][j];
   return prune(gid);
-}
-
-const boost::dynamic_bitset<>* PruneIndex::prune(std::string g, std::string s) const {
-  return prune(word_to_i_.at(g), word_to_i_.at(s));
 }
 
 /**
@@ -131,13 +124,6 @@ void PruneIndex::_index_prune() {
   }
 }
 
-void PruneIndex::_index_word_to_i(const std::vector<std::string>& wordlist) {
-  for (size_t i = 0; i < size_; ++i) {
-    std::string g = wordlist.at(i);
-    word_to_i_.insert({g, i});
-  }
-}
-
 void PruneIndex::save(std::ostream& os) const {
   boost::dynamic_bitset<> ulong_mask(size_, ULONG_MAX);
 
@@ -162,11 +148,9 @@ void PruneIndex::save(std::ostream& os) const {
   }
 }
 
-void PruneIndex::load(const std::string& filename) {
+void PruneIndex::load(std::ifstream& file) {
   // Number of unsigned long blocks required to fully hold size_ bits
   const size_t UL_BLOCKS_PER_BITSET = (size_ - 1) / (8 * SIZE_UL) + 1;
-
-  std::ifstream file(filename);
 
   char buf_64[SIZE_64]; // separate buffer for reading fixed size vals
 
@@ -201,6 +185,19 @@ void PruneIndex::load(const std::string& filename) {
   }
 
   delete[] bits_buf;
+}
+
+void PruneIndex::load_or_generate(const std::string& filename) {
+  std::ifstream file(filename);
+  if (file.good()) {
+    load(file);
+  } else {
+    file.close();
+
+    std::ofstream out(filename);
+    index();
+    save(out);
+  }
 }
 
 #endif

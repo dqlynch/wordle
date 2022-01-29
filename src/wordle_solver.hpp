@@ -14,11 +14,10 @@
 class WordleSolver {
  public:
   WordleSolver(std::vector<std::string> wordlist)
-    : wordlist_(wordlist), pindex_(PruneIndex(wordlist)), size_(wordlist.size()) {}
+    : size_(wordlist.size()), pindex_(PruneIndex(wordlist)) {}
 
-  // TODO move pindex file save/load into WordleSolver
-  WordleSolver(std::vector<std::string> wordlist, PruneIndex&& pindex)
-    : wordlist_(wordlist), pindex_(std::move(pindex)), size_(wordlist.size()) {}
+  WordleSolver(PruneIndex&& pindex)
+    : size_(pindex.size()), pindex_(std::move(pindex)) {}
 
   /**
    * Player picks the best guess that minimizes his path.
@@ -39,7 +38,7 @@ class WordleSolver {
     return solve(boost::dynamic_bitset<>(size_));
   }
 
-  boost::dynamic_bitset<> make_guess(boost::dynamic_bitset<> pruned, size_t g_idx);
+  std::pair<size_t, boost::dynamic_bitset<>> make_guess(boost::dynamic_bitset<> pruned, size_t g_idx);
 
  private:
    static bool cmp(std::pair<size_t, int> a, std::pair<size_t, int> b) {
@@ -48,10 +47,8 @@ class WordleSolver {
 
   std::unordered_map<boost::dynamic_bitset<>, std::pair<int, size_t>> memo_;
 
-  const std::vector<std::string> wordlist_;
-  const PruneIndex pindex_;
-
   size_t size_;
+  const PruneIndex pindex_;
 };
 
 std::pair<size_t, int> WordleSolver::player(const boost::dynamic_bitset<>& pruned, int depth) {
@@ -73,7 +70,7 @@ std::pair<size_t, int> WordleSolver::player(const boost::dynamic_bitset<>& prune
       continue;
     }
     if (depth == 0) {
-      std::cout << g_idx << ": " << wordlist_[g_idx] << std::endl;
+      //std::cout << g_idx << ": " << wordlist_[g_idx] << std::endl;
     }
 
     std::pair<size_t, int> guess(g_idx, antagonist(pruned, g_idx, depth).second);
@@ -117,9 +114,11 @@ std::pair<size_t, int> WordleSolver::antagonist(boost::dynamic_bitset<> pruned,
   return worst_solution;
 }
 
-boost::dynamic_bitset<> WordleSolver::make_guess(boost::dynamic_bitset<> pruned, size_t g_idx) {
-  size_t worst_solution = antagonist(pruned, g_idx, 0).first;
-  return pruned | *pindex_.prune(g_idx, worst_solution);
+std::pair<size_t, boost::dynamic_bitset<>> WordleSolver::make_guess(boost::dynamic_bitset<> pruned, size_t g_idx) {
+  std::pair<size_t, int> worst_solution = antagonist(pruned, g_idx, 0);
+  std::cout << "Best possible: " << worst_solution.second << std::endl;
+  return std::pair<size_t, boost::dynamic_bitset<>>(worst_solution.first,
+      pruned | *pindex_.prune(g_idx, worst_solution.first));
 }
 
 #endif
